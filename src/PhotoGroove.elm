@@ -2,10 +2,12 @@ module PhotoGroove exposing (main)
 
 import Browser
 import Html exposing (Html, div, h1, h3, button, img, text, input, label)
-import Html.Attributes exposing (..)
+import Html.Attributes exposing (class, classList, id, src, type_, name, checked, title)
 import Html.Events exposing (onClick)
 import Random
 import Http
+import Json.Decode exposing (Decoder, list, string, int, succeed)
+import Json.Decode.Pipeline exposing (optional, required)
 
 type Status
     = Loading
@@ -22,9 +24,12 @@ type Msg
     | ClickedSize ThumbnailSize
     | ClickedSurpriseMe
     | GotRandomPhoto Photo
-    | GotPhotos (Result Http.Error String)
+    | GotPhotos (Result Http.Error (List Photo))
 type alias Photo =
-    { url: String }
+    { url: String
+    , size: Int
+    , title: String
+    }
 
 type ThumbnailSize
     = Small
@@ -64,25 +69,20 @@ update msg model =
         GotRandomPhoto photo ->
             ( { model | status = selectUrl photo.url model.status }, Cmd.none)
 
-        GotPhotos (Ok responseStr) ->
-            case String.split "," responseStr of
-                        (firstUrl :: _) as urls ->
-                            let
-                                    photos =
-                                        List.map Photo urls
-                            in
-                            ( { model | status = Loaded photos firstUrl }, Cmd.none)
-                        [] ->
-                            ( { model | status = Errored "0 photos found" }, Cmd.none)
-
+        GotPhotos (Ok photos) ->
+            case photos of
+                x :: _ ->
+                    ( { model | status = Loaded photos x.url }, Cmd.none )
+                [] ->
+                    ( { model | status = Errored "0 photos found" }, Cmd.none )
         GotPhotos (Err _) ->
             ({ model | status = Errored "Server error!" }, Cmd.none)
 
 initalCmd: Cmd Msg
 initalCmd =
     Http.get
-        { url = "http://elm-in-action.com/photos/list"
-        , expect = Http.expectString GotPhotos
+        { url = "http://elm-in-action.com/photos/list.json"
+        , expect = Http.expectJson GotPhotos (list photoDecoder)
         }
 
 urlPrefix: String
@@ -124,6 +124,7 @@ viewThumbnail: String -> Photo -> Html Msg
 viewThumbnail selectedUrl thumb =
     img
         [ src (urlPrefix ++ thumb.url)
+        , title (thumb.title ++ " [" ++ String.fromInt thumb.size ++ "KB]")
         , classList [ ("selected", selectedUrl == thumb.url) ]
         , onClick (ClickedPhoto thumb.url)
         ]
@@ -145,6 +146,13 @@ sizeToString size =
             "medium"
         Large ->
             "large"
+
+photoDecoder: Decoder Photo
+photoDecoder =
+    succeed Photo
+        |> required "url" string
+        |> required "size" int
+        |> optional "title" string "(untitled)"
 
 selectUrl: String -> Status -> Status
 selectUrl url status =
