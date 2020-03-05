@@ -1,7 +1,7 @@
-module PhotoGroove exposing (main)
+port module PhotoGroove exposing (main)
 
 import Browser
-import Html exposing (Html, Attribute, node, div, h1, h3, button, img, text, input, label)
+import Html exposing (Html, Attribute, node, div, h1, h3, button, img, text, input, label, canvas)
 import Html.Attributes exposing (class, classList, id, src, type_, name, checked, title)
 import Html.Events exposing (on, onClick)
 import Random
@@ -21,6 +21,7 @@ type alias Model =
     , hue: Int
     , ripple: Int
     , noise: Int
+    , activity: String
     }
 
 type Msg
@@ -29,6 +30,7 @@ type Msg
     | ClickedSurpriseMe
     | GotRandomPhoto Photo
     | GotPhotos (Result Http.Error (List Photo))
+    | GotActivity String
     | SlideHue Int
     | SlideRipple Int
     | SlideNoise Int
@@ -36,6 +38,15 @@ type alias Photo =
     { url: String
     , size: Int
     , title: String
+    }
+
+port setFilters : FilterOptions -> Cmd msg
+
+port activityChanges: (String -> msg) -> Sub msg
+
+type alias FilterOptions =
+    { url: String
+    , filters: List { name: String, amount: Float }
     }
 
 type ThumbnailSize
@@ -50,13 +61,14 @@ initialModel =
     , hue = 5
     , ripple = 5
     , noise = 5
+    , activity = ""
     }
 
 update: Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         ClickedPhoto url ->
-            ( { model | status = selectUrl url model.status }, Cmd.none )
+            applyFilters { model | status = selectUrl url model.status }
 
         ClickedSurpriseMe ->
             case model.status of
@@ -77,25 +89,51 @@ update msg model =
             ( { model | chosenSize = size }, Cmd.none )
 
         GotRandomPhoto photo ->
-            ( { model | status = selectUrl photo.url model.status }, Cmd.none)
+            applyFilters { model | status = selectUrl photo.url model.status }
 
         GotPhotos (Ok photos) ->
             case photos of
                 x :: _ ->
-                    ( { model | status = Loaded photos x.url }, Cmd.none )
+                    applyFilters { model | status = Loaded photos x.url }
                 [] ->
                     ( { model | status = Errored "0 photos found" }, Cmd.none )
         GotPhotos (Err _) ->
             ({ model | status = Errored "Server error!" }, Cmd.none)
 
         SlideHue hue ->
-            ( { model |  hue = hue }, Cmd.none )
+            applyFilters { model | hue = hue }
         
         SlideRipple ripple ->
-            ( { model | ripple = ripple }, Cmd.none )
+            applyFilters { model | ripple = ripple }
         
         SlideNoise noise ->
-            ( { model | noise = noise }, Cmd.none )
+            applyFilters { model | noise = noise }
+
+        GotActivity activity ->
+            ( { model | activity = activity }, Cmd.none )
+applyFilters: Model -> ( Model, Cmd Msg )
+applyFilters model =
+    case model.status of
+        Loaded _ selectedUrl ->
+            let
+                filters =
+                    [ { name = "Hue", amount = toFloat model.hue / 11 }
+                    , { name = "Ripple", amount = toFloat model.ripple / 11 }
+                    , { name = "Noise", amount = toFloat model.noise / 11 }
+                    ]
+                url =
+                    urlPrefix  ++ "large/" ++ selectedUrl
+                
+                cmd =
+                    setFilters { url = url, filters = filters }
+            in
+            (model, cmd)
+        
+        Loading ->
+            (model, Cmd.none)
+        
+        Errored _ ->
+            (model, Cmd.none)
 
 initalCmd: Cmd Msg
 initalCmd =
@@ -129,6 +167,7 @@ viewLoaded photos selectedUrl chosenSize model =
             , class "surprise-me"
             ]
             [ text "Surprise me!"]
+        , div [ class "activity" ] [ text model.activity ]
         , div [ class "filters" ]
             [ viewFilter SlideHue "Hue" model.hue
             , viewFilter SlideRipple "Ripple" model.ripple
@@ -141,9 +180,9 @@ viewLoaded photos selectedUrl chosenSize model =
             ]
         , div [ id "thumbnails", class (sizeToString chosenSize) ]
             (List.map (viewThumbnail selectedUrl) photos)
-        , img
-            [ class "large"
-            , src (urlPrefix ++ "large/" ++ selectedUrl)
+        , canvas
+            [ id "main-canvas"
+            , class "large"
             ]
             []
         ]
@@ -205,14 +244,26 @@ selectUrl url status =
         Errored _ ->
             status
 
-main: Program () Model Msg
+main: Program Float Model Msg
 main =
     Browser.element
-        { init = \_ -> (initialModel, initalCmd)
+        { init = init
         , view = view
         , update = update
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         }
+
+init: Float -> (Model,  Cmd Msg)
+init flags =
+    let
+        activity =
+            "Initializing Past v" ++ String.fromFloat flags
+    in
+    ( { initialModel | activity = activity }, initalCmd )
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    activityChanges GotActivity
 
 rangeSlider: List (Attribute msg) -> List (Html msg) -> Html msg
 rangeSlider attributes children =

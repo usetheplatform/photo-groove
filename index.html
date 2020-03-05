@@ -16,10 +16,22 @@
 <body>
     <div id="app"></div>
 
+    <script src="http://elm-in-action.com/pasta.js"></script>
     <script src="elm.js"></script>
 
     <script>
-        Elm.PhotoGroove.init({ node: document.getElementById("app") });
+        const app = Elm.PhotoGroove.init({ node: document.getElementById("app") });
+
+        app.ports.setFilters.subscribe(options => {
+            requestAnimationFrame(() => {
+                Pasta.apply(document.getElementById("main-canvas"), options);
+            });
+        });
+
+        Pasta.addActivityListener(activity => {
+            console.log("Got some activity to send to Elm:", activity);
+            app.ports.activityChanges.send(activity);
+        });
     </script>
 </body>
 
