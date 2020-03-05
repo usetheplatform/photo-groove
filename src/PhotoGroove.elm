@@ -42,6 +42,8 @@ type alias Photo =
 
 port setFilters : FilterOptions -> Cmd msg
 
+-- could be decoded using Json.Decode.decodeValue
+-- port activityChanges: (Value -> msg) -> Sub msg
 port activityChanges: (String -> msg) -> Sub msg
 
 type alias FilterOptions =

@@ -20,7 +20,7 @@
     <script src="elm.js"></script>
 
     <script>
-        const app = Elm.PhotoGroove.init({ node: document.getElementById("app") });
+        const app = Elm.PhotoGroove.init({ node: document.getElementById("app"), flags: Pasta.version });
 
         app.ports.setFilters.subscribe(options => {
             requestAnimationFrame(() => {
