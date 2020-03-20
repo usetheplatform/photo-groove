@@ -19,7 +19,7 @@
     <script src="http://elm-in-action.com/pasta.js"></script>
     <script src="elm.js"></script>
 
-    <script>
+    <!-- <script>
         const app = Elm.PhotoGroove.init({ node: document.getElementById("app"), flags: Pasta.version });
 
         app.ports.setFilters.subscribe(options => {
@@ -32,6 +32,9 @@
             console.log("Got some activity to send to Elm:", activity);
             app.ports.activityChanges.send(activity);
         });
+    </script> -->
+    <script>
+        const app = Elm.PhotoFolders.init({ node: document.getElementById("app") });
     </script>
 </body>
 
