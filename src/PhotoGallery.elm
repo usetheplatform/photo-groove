@@ -1,6 +1,5 @@
-port module PhotoGroove exposing (Model, Msg(..), Photo, Status(..), initialModel, main, photoDecoder, update, urlPrefix, view)
+port module PhotoGallery exposing (Model, Msg(..), Photo, Status(..), init, initialModel, photoDecoder, subscriptions, update, urlPrefix, view)
 
-import Browser
 import Html exposing (Attribute, Html, button, canvas, div, h1, h3, img, input, label, node, text)
 import Html.Attributes exposing (checked, class, classList, id, name, src, title, type_)
 import Html.Events exposing (on, onClick)
@@ -187,8 +186,7 @@ view model =
 
 viewLoaded : List Photo -> String -> ThumbnailSize -> Model -> List (Html Msg)
 viewLoaded photos selectedUrl chosenSize model =
-    [ h1 [ class "title" ] [ text "Photo Groove" ]
-    , button
+    [ button
         [ onClick ClickedSurpriseMe
         , class "surprise-me"
         ]
@@ -281,14 +279,15 @@ selectUrl url status =
             status
 
 
-main : Program Float Model Msg
-main =
-    Browser.element
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        }
+
+-- main : Program Float Model Msg
+-- main =
+--     Browser.element
+--         { init = init
+--         , view = view
+--         , update = update
+--         , subscriptions = subscriptions
+--         }
 
 
 init : Float -> ( Model, Cmd Msg )

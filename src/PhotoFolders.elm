@@ -1,13 +1,13 @@
-module PhotoFolders exposing (main)
+module PhotoFolders exposing (Model, Msg, init, update, view)
 
-import Browser
 import Dict exposing (Dict)
 import Html exposing (..)
-import Html.Attributes exposing (..)
+import Html.Attributes exposing (class, src)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode exposing (Decoder, int, list, string)
 import Json.Decode.Pipeline exposing (required)
+import Platform.Cmd as Cmd exposing (Cmd)
 
 
 type alias Photo =
@@ -42,9 +42,9 @@ initialModel =
     }
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( initialModel
+init : Maybe String -> ( Model, Cmd Msg )
+init selectedFilename =
+    ( { initialModel | selectedPhotoUrl = selectedFilename }
     , Http.get
         { url = "http://elm-in-action.com/folders/list"
         , expect = Http.expectJson GotInitialModel modelDecoder
@@ -87,61 +87,81 @@ urlPrefix =
 
 modelDecoder : Decoder Model
 modelDecoder =
-    Json.Decode.succeed
-        { selectedPhotoUrl = Just "trevi"
-        , photos =
-            Dict.fromList
-                [ ( "trevi", { title = "Trevi", relatedUrls = [ "coli", "fresco" ], size = 34, url = "trevi" } )
-                , ( "fresco", { title = "Fresco", relatedUrls = [ "trevi" ], size = 46, url = "fresco" } )
-                , ( "coli", { title = "Coliseum", relatedUrls = [ "trevi" ], size = 36, url = "coli" } )
-                ]
-        , root =
-            Folder
-                { name = "Photos"
-                , expanded = True
-                , photoUrls = []
-                , subfolders =
-                    [ Folder
-                        { name = "2016"
-                        , expanded = True
-                        , photoUrls = [ "trevi", "coli" ]
-                        , subfolders =
-                            [ Folder
-                                { name = "outdoors"
-                                , expanded = True
-                                , photoUrls = []
-                                , subfolders = []
-                                }
-                            , Folder
-                                { name = "indoors"
-                                , expanded = True
-                                , photoUrls = [ "fresco" ]
-                                , subfolders = []
-                                }
-                            ]
-                        }
-                    , Folder
-                        { name = "2017"
-                        , expanded = True
-                        , photoUrls = []
-                        , subfolders =
-                            [ Folder
-                                { name = "outdoors"
-                                , expanded = True
-                                , photoUrls = []
-                                , subfolders = []
-                                }
-                            , Folder
-                                { name = "indoors"
-                                , expanded = True
-                                , photoUrls = []
-                                , subfolders = []
-                                }
-                            ]
-                        }
-                    ]
-                }
+    Json.Decode.map2
+        (\photos root ->
+            { photos = photos, root = root, selectedPhotoUrl = Nothing }
+        )
+        modelPhotosDecoder
+        folderDecoder
+
+
+type alias JsonPhoto =
+    { title : String
+    , size : Int
+    , relatedUrls : List String
+    }
+
+
+jsonPhotoDecoder : Decoder JsonPhoto
+jsonPhotoDecoder =
+    Json.Decode.succeed JsonPhoto
+        |> required "title" string
+        |> required "size" int
+        |> required "related_photos" (list string)
+
+
+finishPhoto : ( String, JsonPhoto ) -> ( String, Photo )
+finishPhoto ( url, json ) =
+    ( url
+    , { url = url
+      , size = json.size
+      , title = json.title
+      , relatedUrls = json.relatedUrls
+      }
+    )
+
+
+fromPairs : List ( String, JsonPhoto ) -> Dict String Photo
+fromPairs pairs =
+    pairs
+        |> List.map finishPhoto
+        |> Dict.fromList
+
+
+photoDecoder : Decoder (Dict String Photo)
+photoDecoder =
+    Json.Decode.keyValuePairs jsonPhotoDecoder
+        |> Json.Decode.map fromPairs
+
+
+folderDecoder : Decoder Folder
+folderDecoder =
+    Json.Decode.succeed folderFromJson
+        |> required "name" string
+        |> required "photos" photoDecoder
+        |> required "subfolders" (Json.Decode.lazy (\_ -> list folderDecoder))
+
+
+folderFromJson : String -> Dict String Photo -> List Folder -> Folder
+folderFromJson name photos subfolders =
+    Folder
+        { name = name
+        , expanded = True
+        , subfolders = subfolders
+        , photoUrls = Dict.keys photos
         }
+
+
+modelPhotosDecoder : Decoder (Dict String Photo)
+modelPhotosDecoder =
+    Json.Decode.succeed modelPhotosFromJson
+        |> required "photos" photoDecoder
+        |> required "subfolders" (Json.Decode.lazy (\_ -> list modelPhotosDecoder))
+
+
+modelPhotosFromJson : Dict String Photo -> List (Dict String Photo) -> Dict String Photo
+modelPhotosFromJson folderPhotos subfolderPhotos =
+    List.foldl Dict.union folderPhotos subfolderPhotos
 
 
 type Msg
@@ -184,9 +204,7 @@ view model =
     in
     div [ class "content" ]
         [ div [ class "folders" ]
-            [ h1 [] [ text "Folders" ]
-            , viewFolder End model.root
-            ]
+            [ viewFolder End model.root ]
         , selectedPhoto
         ]
 
@@ -256,11 +274,12 @@ viewRelatedPhoto url =
         []
 
 
-main : Program () Model Msg
-main =
-    Browser.element
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = \_ -> Sub.none
-        }
+
+-- main : Program () Model Msg
+-- main =
+--     Browser.element
+--         { init = init
+--         , view = view
+--         , update = update
+--         , subscriptions = \_ -> Sub.none
+--         }
